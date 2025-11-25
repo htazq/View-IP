@@ -1,0 +1,71 @@
+# GitHub Actions 工作流：自动部署到 EdgeOne Pages
+# 参考 .cnb.yml 配置，保持与 CNB.cool 部署流程一致
+name: Deploy to EdgeOne Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 步骤 1：检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 步骤 2：准备部署目录（与 .cnb.yml 的 prepare-deploy 阶段一致）
+      - name: Prepare deployment files
+        run: |
+          mkdir -p deploy-temp/functions
+          # 部署 IP Dashboard 函数
+          # 部署为根路径 (index)
+          cp edge-functions/ip/index.js deploy-temp/functions/index.js
+          # 部署为 /app 路径 (用于前端 JS 资源)
+          cp edge-functions/ip/index.js deploy-temp/functions/app.js
+          ls -la deploy-temp/
+          echo "✅ 部署目录准备完成"
+
+      # 步骤 3：部署到 EdgeOne Pages（与 .cnb.yml 的 deploy-to-eopages 阶段一致）
+      - name: Deploy to EdgeOne Pages
+        env:
+          EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
+        run: |
+          # 使用官方 EdgeOne Pages 部署镜像
+          docker run --rm \
+            -v ${{ github.workspace }}/deploy-temp:/workspace \
+            -e EDGEONE_API_TOKEN=$EDGEONE_API_TOKEN \
+            tencentcom/deploy-eopages:latest \
+            edgeone pages deploy /workspace -n worker-ip -t $EDGEONE_API_TOKEN
+
+          echo "✅ 部署完成"
+          echo "🌐 访问地址: https://ip.at9.net"
+
+      # 步骤 4：部署摘要
+      - name: Deployment Summary
+        if: success()
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ 部署成功！"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📦 部署文件: deploy-temp/functions/"
+          echo "🚀 部署平台: EdgeOne Pages"
+          echo "🌐 在线访问: https://ip.at9.net"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      # 步骤 5：部署失败通知
+      - name: Deployment Failed
+        if: failure()
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "❌ 部署失败！"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "请检查："
+          echo "1. EDGEONE_API_TOKEN 是否正确配置"
+          echo "2. EdgeOne Pages 服务是否正常"
+          echo "3. 查看上方日志获取详细错误信息"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+

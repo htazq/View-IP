@@ -1,0 +1,42 @@
+$:
+  vscode:
+    - docker:
+        # 指定云原生开发启动时的基础镜像为当前镜像
+        image: docker.cnb.cool/htazq/image/node-22:latest
+      env:
+        CNB_WELCOME_EXECUTE_COMMAND: bash /workspace/welcome.sh
+      services:
+        - vscode
+        - docker
+      stages:
+        - node -v
+        - npm install
+
+
+main:
+  push:
+    eo_deploy:  # Edgeone Pages部署配置
+      runner:
+        cpus: 1  # 纯静态项目，1核足够
+      # docker:  # 已注释：使用 stage 级别的镜像配置
+      #   image: docker.cnb.cool/arsrna/dev-env/node22
+      stages:
+        # 阶段1：准备部署目录（只包含必要文件）
+        - name: prepare-deploy
+          script:
+            - mkdir -p deploy-temp/functions
+            # 部署 IP Dashboard 函数
+            # 部署为根路径 (index)
+            - cp edge-functions/ip/index.js deploy-temp/functions/index.js
+            # 部署为 /app 路径 (用于前端 JS 资源)
+            - cp edge-functions/ip/index.js deploy-temp/functions/app.js
+            - ls -la deploy-temp/
+            - echo "部署目录准备完成"
+
+        # 阶段2：部署到Edgeone Pages（测试模式，自动生成临时域名）
+        - name: deploy-to-eopages
+          imports:
+            # 导入Edgeone的API Token（超重要！替换成你的实际路径！）
+            - https://cnb.cool/htazq/my-secrets/-/blob/main/wx-envs.yml
+          image: tencentcom/deploy-eopages:latest  # 官方部署镜像（内置 EdgeOne CLI）
+          script: edgeone pages deploy ./deploy-temp -n worker-ip -t $EDGEONE_API_TOKEN 
